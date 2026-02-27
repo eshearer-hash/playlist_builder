@@ -115,13 +115,17 @@ def _search_tidal_by_name(session: tidalapi.Session, name: str, artists: list[st
 def _get_tidal_ids_by_isrcs(
     isrcs: list[str],
     session: tidalapi.Session,
+    max_workers: int = 10,
 ) -> dict[str, str | None]:
-    """Look up TIDAL track IDs for a list of ISRCs."""
+    """Look up TIDAL track IDs for a list of ISRCs (concurrent)."""
     isrc_to_tidal: dict[str, str | None] = {}
     with tqdm(total=len(isrcs), desc="Looking up TIDAL IDs") as pbar:
-        for isrc in isrcs:
-            isrc_to_tidal[isrc] = _get_tidal_id_by_isrc(session, isrc)
-            pbar.update(1)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(_get_tidal_id_by_isrc, session, isrc): isrc for isrc in isrcs}
+            for future in concurrent.futures.as_completed(futures):
+                isrc = futures[future]
+                isrc_to_tidal[isrc] = future.result()
+                pbar.update(1)
     return isrc_to_tidal
 
 
@@ -165,18 +169,25 @@ def spotify_to_tidal_ids(
         })
 
     if fallback_needed:
-        with tqdm(total=len(fallback_needed), desc="Searching TIDAL by name (fallback)") as pbar:
-            for entry in results:
-                if entry["tidal_id"] is not None or entry["spotify_id"] not in fallback_needed:
-                    continue
-                meta = spotify_id_to_meta.get(entry["spotify_id"], {})
-                tidal_id = _search_tidal_by_name(
-                    tidal_session,
-                    meta.get("name", ""),
-                    meta.get("artists", []),
-                )
-                entry["tidal_id"] = tidal_id
-                pbar.update(1)
+        fallback_set = set(fallback_needed)
+        fallback_entries = [e for e in results if e["tidal_id"] is None and e["spotify_id"] in fallback_set]
+
+        def _do_fallback(entry):
+            meta = spotify_id_to_meta.get(entry["spotify_id"], {})
+            return entry["spotify_id"], _search_tidal_by_name(
+                tidal_session, meta.get("name", ""), meta.get("artists", []),
+            )
+
+        with tqdm(total=len(fallback_entries), desc="Searching TIDAL by name (fallback)") as pbar:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+                futures = {pool.submit(_do_fallback, e): e for e in fallback_entries}
+                fb_lookup: dict[str, str | None] = {}
+                for future in concurrent.futures.as_completed(futures):
+                    sid, tid = future.result()
+                    fb_lookup[sid] = tid
+                    pbar.update(1)
+        for entry in fallback_entries:
+            entry["tidal_id"] = fb_lookup.get(entry["spotify_id"])
 
     return results
 
