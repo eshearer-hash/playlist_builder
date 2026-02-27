@@ -1,0 +1,25 @@
+# Environment & secrets
+.env
+.venv/
+tidal_session.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Generated data
+*.csv
+*.png
+
+# IDE
+.vscode/
+
+# Dependencies
+OrpheusDL/
