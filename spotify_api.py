@@ -301,6 +301,22 @@ def get_tracks_metadata(track_ids: list[str], headers: dict[str, str]) -> list[d
     return results
 
 
+def get_track_id(artist_name: str, song_name: str, headers: dict[str, str]) -> str | None:
+    """Search for a track by artist and song name, return its Spotify ID or None."""
+    session = _session_with_retries(headers)
+    query = f"track:{song_name} artist:{artist_name}"
+    resp = session.get(
+        "https://api.spotify.com/v1/search",
+        params={"q": query, "type": "track", "limit": 1},
+    )
+    resp.raise_for_status()
+    items = resp.json()["tracks"]["items"]
+    if not items:
+        logger.warning(f"No track found for '{song_name}' by '{artist_name}'")
+        return None
+    return items[0]["id"]
+
+
 def get_track_metadata(track_id: str, HEADERS: dict[str, str]) -> dict:
     """Fetch track metadata for a single track ID.
 

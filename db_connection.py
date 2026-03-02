@@ -18,7 +18,7 @@ class Songs(BaseModel):
     id = UUIDField(primary_key=True)
     spotify_id = TextField(unique=True)
     tidal_id = TextField(unique=True, null=True)  # may be null if no TIDAL match
-    song_name = TextField(unique=True)
+    song_name = TextField(unique=False)
     artists = ArrayField(TextField)
     album_name = TextField(null=True)  # may be null if no album info available
     album_total_tracks = IntegerField(null=True)  # may be null if no album info available
