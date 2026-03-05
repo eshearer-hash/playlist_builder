@@ -16,6 +16,7 @@ build/
 
 # Generated data
 *.png
+*.csv
 
 # IDE
 .vscode/
